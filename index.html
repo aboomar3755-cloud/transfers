@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Transfer Tracker 🚀</title>
+
+<style>
+body {
+  font-family: Arial;
+  background: #0f172a;
+  color: white;
+  text-align: center;
+}
+
+.container {
+  margin-top: 50px;
+}
+
+input, button {
+  padding: 10px;
+  margin: 10px;
+  border-radius: 10px;
+  border: none;
+}
+
+button {
+  background: #22c55e;
+  color: white;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #16a34a;
+}
+
+table {
+  margin: 20px auto;
+  border-collapse: collapse;
+  width: 60%;
+}
+
+th, td {
+  border: 1px solid #333;
+  padding: 10px;
+}
+
+th {
+  background: #1e293b;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <h2>🚀 Transfer Tracker</h2>
+
+  <input type="text" id="agent" placeholder="Agent Name">
+  <input type="number" id="transfers" placeholder="Transfers">
+
+  <br>
+  <button onclick="addTransfer()">ADD</button>
+  <button onclick="resetData()">RESET</button>
+
+  <h3>📊 Summary</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Agent</th>
+        <th>Total Transfers</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<script>
+let data = JSON.parse(localStorage.getItem("transfers")) || {};
+
+function addTransfer() {
+  let agent = document.getElementById("agent").value.trim();
+  let transfers = parseInt(document.getElementById("transfers").value);
+
+  if (!agent || isNaN(transfers)) {
+    alert("Enter valid data");
+    return;
+  }
+
+  if (!data[agent]) {
+    data[agent] = 0;
+  }
+
+  data[agent] += transfers;
+
+  localStorage.setItem("transfers", JSON.stringify(data));
+
+  updateTable();
+
+  document.getElementById("agent").value = "";
+  document.getElementById("transfers").value = "";
+}
+
+function updateTable() {
+  let table = document.getElementById("tableBody");
+  table.innerHTML = "";
+
+  for (let agent in data) {
+    let row = `<tr>
+      <td>${agent}</td>
+      <td>${data[agent]}</td>
+    </tr>`;
+    table.innerHTML += row;
+  }
+}
+
+function resetData() {
+  if (confirm("Are you sure?")) {
+    localStorage.removeItem("transfers");
+    data = {};
+    updateTable();
+  }
+}
+
+updateTable();
+</script>
+
+</body>
+</html>
