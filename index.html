@@ -1,9 +1,8 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Excel Transfer Tracker 🚀</title>
+<title>Weekly Transfer Tracker 🚀</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
@@ -18,7 +17,7 @@ body {
 table {
   margin: 20px auto;
   border-collapse: collapse;
-  width: 60%;
+  width: 70%;
 }
 
 th, td {
@@ -34,9 +33,11 @@ th, td {
 
 <body>
 
-<h2>📂 Upload Excel File</h2>
+<h2>📂 Upload Daily Excel</h2>
 
-<input type="file" id="fileInput" accept=".xlsx, .xls">
+<input type="file" id="fileInput" accept=".xlsx, .xls, .csv">
+
+<h3 id="weekInfo"></h3>
 
 <div id="leaderboard"></div>
 
@@ -52,9 +53,38 @@ th, td {
 </table>
 
 <script>
+let stored = JSON.parse(localStorage.getItem("weeklyData")) || {
+  weekStart: null,
+  data: {}
+};
+
+// 📅 نحدد بداية الأسبوع (الإتنين)
+function getMonday(d) {
+  d = new Date(d);
+  let day = d.getDay();
+  let diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff)).toDateString();
+}
+
+// 🔄 تحقق لو أسبوع جديد
+function checkNewWeek() {
+  let todayMonday = getMonday(new Date());
+
+  if (stored.weekStart !== todayMonday) {
+    stored = {
+      weekStart: todayMonday,
+      data: {}
+    };
+    localStorage.setItem("weeklyData", JSON.stringify(stored));
+  }
+}
+
+// 📂 قراءة الملف
 document.getElementById('fileInput').addEventListener('change', handleFile);
 
 function handleFile(e) {
+  checkNewWeek();
+
   const file = e.target.files[0];
   const reader = new FileReader();
 
@@ -71,20 +101,28 @@ function handleFile(e) {
   reader.readAsArrayBuffer(file);
 }
 
+// 📊 تجميع الداتا
 function processData(rows) {
-  let totals = {};
-
   rows.forEach(row => {
     let agent = row["Agent"];
     let transfers = Number(row["Transfers"]);
 
-    if (!totals[agent]) totals[agent] = 0;
-    totals[agent] += transfers;
+    if (!stored.data[agent]) stored.data[agent] = 0;
+    stored.data[agent] += transfers;
   });
 
-  let sorted = Object.entries(totals).sort((a,b) => b[1] - a[1]);
+  localStorage.setItem("weeklyData", JSON.stringify(stored));
 
-  // Leaderboard
+  updateUI();
+}
+
+// 📈 عرض النتائج
+function updateUI() {
+  let sorted = Object.entries(stored.data).sort((a,b) => b[1] - a[1]);
+
+  document.getElementById("weekInfo").innerText =
+    "Week Starting: " + stored.weekStart;
+
   let lb = document.getElementById("leaderboard");
   lb.innerHTML = "";
 
@@ -92,7 +130,6 @@ function processData(rows) {
   if (sorted[1]) lb.innerHTML += `<div class="silver">🥈 ${sorted[1][0]} - ${sorted[1][1]}</div>`;
   if (sorted[2]) lb.innerHTML += `<div class="bronze">🥉 ${sorted[2][0]} - ${sorted[2][1]}</div>`;
 
-  // Table
   let table = document.getElementById("tableBody");
   table.innerHTML = "";
 
@@ -104,6 +141,10 @@ function processData(rows) {
     </tr>`;
   });
 }
+
+// تشغيل أولي
+checkNewWeek();
+updateUI();
 </script>
 
 </body>
