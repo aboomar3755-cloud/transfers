@@ -2,17 +2,36 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Live Google Sheets Leaderboard</title>
+<title>Live Weekly Leaderboard</title>
+
 <style>
-body { font-family: Arial; background:#0f172a; color:white; text-align:center; }
-table { margin: 20px auto; border-collapse: collapse; width: 80%; }
-th, td { border:1px solid #333; padding:10px; }
-.highest { background:#0ea5e9; font-weight:bold; }
+body {
+  font-family: Arial, sans-serif;
+  background: #0f172a;
+  color: white;
+  text-align: center;
+}
+table {
+  margin: 20px auto;
+  border-collapse: collapse;
+  width: 90%;
+}
+th, td {
+  border: 1px solid #333;
+  padding: 8px;
+}
+th {
+  background: #1e293b;
+}
+.highest {
+  background: #0ea5e9 !important;
+  font-weight: bold;
+}
 </style>
 </head>
 <body>
 
-<h2>📊 Live Leaderboard</h2>
+<h2>📊 Live Weekly Leaderboard (From Google Sheets)</h2>
 
 <table>
   <thead><tr id="tableHeader"></tr></thead>
@@ -20,93 +39,119 @@ th, td { border:1px solid #333; padding:10px; }
 </table>
 
 <script>
-const DAILY_URL = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/gviz/tq?tqx=out:csv&sheet=DAILY";
-const WEEKLY_URL = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/gviz/tq?tqx=out:csv&sheet=WEEKLY";
 
-async function fetchCSV(url){
-    const res = await fetch(url);
-    const text = await res.text();
-    const rows = text.trim().split("\n").map(r=> r.split(","));
-    return rows;
+// 🌐 روابط الـ CSV من Google Sheets
+const DAILY_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSLLLk6nN-q9Ey6wz_j7WUdkfKQBQnoXldyG9Kxxx-1AvN_u3JpBk53Wj93imnQjPlKuEa1Vclf47Gx/pub?output=csv&sheet=DAILY";
+const WEEKLY_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSLLLk6nN-q9Ey6wz_j7WUdkfKQBQnoXldyG9Kxxx-1AvN_u3JpBk53Wj93imnQjPlKuEa1Vclf47Gx/pub?output=csv&sheet=WEEKLY";
+
+// دالة تجلب CSV وتعمل تحويله لمصفوفة
+async function fetchCSV(url) {
+  const res = await fetch(url);
+  const text = await res.text();
+  const rows = text.trim().split("\n").map(r => r.split(","));
+  return rows;
 }
 
-async function updateLeaderboard(){
-    const dailyData = await fetchCSV(DAILY_URL);
-    const weeklyData = await fetchCSV(WEEKLY_URL);
+// الدالة الأساسية للتحديث
+async function updateLeaderboard() {
+  try {
+    const dailyRows = await fetchCSV(DAILY_CSV_URL);
 
-    // اعمل Object للـ DAILY
-    const headers = dailyData[0];
-    const dataRows = dailyData.slice(1);
-    const agents = {};
+    // جمع البيانات
+    const data = {};
     const dates = [];
 
-    dataRows.forEach(r=>{
-        const agent = r[0];
-        const transfers = Number(r[1]) || 0;
-        const date = r[2];
-        if(!dates.includes(date)) dates.push(date);
-        if(!agents[agent]) agents[agent] = {};
-        if(!agents[agent][date]) agents[agent][date] = 0;
-        agents[agent][date] += transfers;
+    // تجاهل صف الهيدر
+    dailyRows.slice(1).forEach(r => {
+      const agent = r[0].trim();
+      const transfers = Number(r[1]) || 0;
+      const date = r[2].trim();
+
+      if (!dates.includes(date)) dates.push(date);
+      if (!data[agent]) data[agent] = {};
+      if (!data[agent][date]) data[agent][date] = 0;
+      data[agent][date] += transfers;
     });
 
-    dates.sort((a,b)=> new Date(a)-new Date(b));
+    dates.sort((a, b) => new Date(a) - new Date(b));
 
-    // اعمل Header
-    const header = ["Agent", ...dates, "Weekly Total"];
+    // بناء الهيدر
+    const headerRow = ["Agent", ...dates, "Weekly Total"];
     const tableHeader = document.getElementById("tableHeader");
     tableHeader.innerHTML = "";
-    header.forEach(h=>{
-        const th = document.createElement("th");
-        th.innerText = h;
-        tableHeader.appendChild(th);
+    headerRow.forEach(h => {
+      const th = document.createElement("th");
+      th.innerText = h;
+      tableHeader.appendChild(th);
     });
 
-    // اعمل Body
+    // إيجاد أعلى رقم لكل يوم
+    const maxPerDay = {};
+    dates.forEach(d => {
+      let max = 0;
+      for (let a in data) {
+        const val = data[a][d] || 0;
+        if (val > max) max = val;
+      }
+      maxPerDay[d] = max;
+    });
+
+    // حذف الـ Body القديم
     const tableBody = document.getElementById("tableBody");
     tableBody.innerHTML = "";
 
-    const maxPerDay = {};
-    dates.forEach(d=>{
-        let max = 0;
-        for(let a in agents){
-            if((agents[a][d]||0) > max) max = agents[a][d];
-        }
-        maxPerDay[d] = max;
+    // تحديد أعلى مجموع أسبوعي
+    let globalMaxWeekly = 0;
+    const weeklyTotals = {};
+
+    Object.keys(data).forEach(agent => {
+      let total = 0;
+      dates.forEach(d => total += data[agent][d] || 0);
+      weeklyTotals[agent] = total;
+      if (total > globalMaxWeekly) globalMaxWeekly = total;
     });
 
-    // اعرض كل Agent
-    for(let a in agents){
-        const tr = document.createElement("tr");
-        let weeklyTotal = 0;
-        const tdName = document.createElement("td");
-        tdName.innerText = a;
-        tr.appendChild(tdName);
+    // بناء الـ Rows
+    Object.keys(data).forEach(agent => {
+      const tr = document.createElement("tr");
 
-        dates.forEach(d=>{
-            const td = document.createElement("td");
-            const val = agents[a][d] || 0;
-            td.innerText = val;
-            if(val === maxPerDay[d] && val>0) td.classList.add("highest");
-            weeklyTotal += val;
-            tr.appendChild(td);
-        });
+      const tdAgent = document.createElement("td");
+      tdAgent.innerText = agent;
+      tr.appendChild(tdAgent);
 
-        const tdTotal = document.createElement("td");
-        tdTotal.innerText = weeklyTotal;
-        if(weeklyTotal === Math.max(...Object.values(agents).map(x=> Object.values(x).reduce((a,b)=>a+b,0)))) tdTotal.classList.add("highest");
-        tr.appendChild(tdTotal);
+      let agentWeeklyTotal = 0;
 
-        tableBody.appendChild(tr);
-    }
+      dates.forEach(d => {
+        const td = document.createElement("td");
+        const val = data[agent][d] || 0;
+        td.innerText = val;
+        if (val === maxPerDay[d] && val > 0) td.classList.add("highest");
+        agentWeeklyTotal += val;
+        tr.appendChild(td);
+      });
+
+      const tdTotal = document.createElement("td");
+      tdTotal.innerText = agentWeeklyTotal;
+      if (agentWeeklyTotal === globalMaxWeekly && globalMaxWeekly > 0) {
+        tdTotal.classList.add("highest");
+      }
+      tr.appendChild(tdTotal);
+
+      tableBody.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error("Error updating leaderboard:", err);
+  }
 }
 
-// أول تحديث
+// أول تحميل
 updateLeaderboard();
 
-// تحديث كل 1 دقيقة (60000 ms)
-setInterval(updateLeaderboard,60000);
+// تحديث كل دقيقة
+setInterval(updateLeaderboard, 60000);
 
 </script>
+
 </body>
 </html>
