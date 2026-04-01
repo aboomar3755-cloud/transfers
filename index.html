@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Weekly Transfer Tracker 🚀</title>
+<title>Weekly Daily Transfer Tracker 🚀</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
@@ -14,10 +14,13 @@ body {
   text-align: center;
 }
 
-table {
+input, table {
   margin: 20px auto;
+}
+
+table {
   border-collapse: collapse;
-  width: 70%;
+  width: 90%;
 }
 
 th, td {
@@ -25,65 +28,85 @@ th, td {
   padding: 10px;
 }
 
-.gold { color: gold; }
-.silver { color: silver; }
-.bronze { color: #cd7f32; }
+th {
+  background: #1e293b;
+}
+
+.gold { color: gold; font-weight: bold; }
+.silver { color: silver; font-weight: bold; }
+.bronze { color: #cd7f32; font-weight: bold; }
 </style>
 </head>
 
 <body>
 
 <h2>📂 Upload Daily Excel</h2>
+<p>Make sure your Excel has columns: <strong>Agent</strong> & <strong>Transfers</strong></p>
 
+<label for="dayInput">Select Day for this Excel:</label>
+<input type="date" id="dayInput">
+
+<br><br>
 <input type="file" id="fileInput" accept=".xlsx, .xls, .csv">
 
 <h3 id="weekInfo"></h3>
-
 <div id="leaderboard"></div>
 
-<table>
+<table id="weeklyTable">
   <thead>
-    <tr>
-      <th>Rank</th>
+    <tr id="tableHeader">
       <th>Agent</th>
-      <th>Total Transfers</th>
+      <th>Mon</th>
+      <th>Tue</th>
+      <th>Wed</th>
+      <th>Thu</th>
+      <th>Fri</th>
+      <th>Weekly Total</th>
     </tr>
   </thead>
   <tbody id="tableBody"></tbody>
 </table>
 
 <script>
+// ✅ هيكل البيانات في localStorage
 let stored = JSON.parse(localStorage.getItem("weeklyData")) || {
   weekStart: null,
-  data: {}
+  dailyData: {}
 };
 
-// 📅 نحدد بداية الأسبوع (الإتنين)
+// 📅 دالة بداية الأسبوع (الإثنين)
 function getMonday(d) {
   d = new Date(d);
   let day = d.getDay();
   let diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.setDate(diff)).toDateString();
+  return new Date(d.setDate(diff));
 }
 
-// 🔄 تحقق لو أسبوع جديد
-function checkNewWeek() {
-  let todayMonday = getMonday(new Date());
+// 🔄 تحقق من أسبوع جديد
+function checkNewWeek(todayStr) {
+  let todayMonday = getMonday(new Date(todayStr));
+  let mondayStr = todayMonday.toDateString();
 
-  if (stored.weekStart !== todayMonday) {
+  if (stored.weekStart !== mondayStr) {
     stored = {
-      weekStart: todayMonday,
-      data: {}
+      weekStart: mondayStr,
+      dailyData: {}
     };
     localStorage.setItem("weeklyData", JSON.stringify(stored));
   }
 }
 
-// 📂 قراءة الملف
+// 📂 قراءة ملف Excel
 document.getElementById('fileInput').addEventListener('change', handleFile);
 
 function handleFile(e) {
-  checkNewWeek();
+  const dayInput = document.getElementById('dayInput').value;
+  if (!dayInput) {
+    alert("Please select a day before uploading the file!");
+    return;
+  }
+
+  checkNewWeek(dayInput);
 
   const file = e.target.files[0];
   const reader = new FileReader();
@@ -95,57 +118,97 @@ function handleFile(e) {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const json = XLSX.utils.sheet_to_json(sheet);
 
-    processData(json);
+    addDailyData(json, dayInput);
   };
 
   reader.readAsArrayBuffer(file);
 }
 
-// 📊 تجميع الداتا
-function processData(rows) {
+// ➕ إضافة بيانات اليوم المحدد
+function addDailyData(rows, dayStr) {
+  if (!stored.dailyData[dayStr]) stored.dailyData[dayStr] = {};
+
   rows.forEach(row => {
     let agent = row["Agent"];
-    let transfers = Number(row["Transfers"]);
+    let transfers = Number(row["Transfers"]) || 0;
 
-    if (!stored.data[agent]) stored.data[agent] = 0;
-    stored.data[agent] += transfers;
+    if (!stored.dailyData[dayStr][agent]) stored.dailyData[dayStr][agent] = 0;
+    stored.dailyData[dayStr][agent] += transfers;
   });
 
   localStorage.setItem("weeklyData", JSON.stringify(stored));
-
   updateUI();
 }
 
-// 📈 عرض النتائج
+// 📊 عرض جدول الأسبوع
 function updateUI() {
-  let sorted = Object.entries(stored.data).sort((a,b) => b[1] - a[1]);
+  let tableBody = document.getElementById("tableBody");
+  tableBody.innerHTML = "";
 
   document.getElementById("weekInfo").innerText =
     "Week Starting: " + stored.weekStart;
 
+  // 1️⃣ اجمع كل Agents
+  let agentsSet = new Set();
+  for (let day in stored.dailyData) {
+    for (let agent in stored.dailyData[day]) {
+      agentsSet.add(agent);
+    }
+  }
+
+  let agents = Array.from(agentsSet).sort();
+
+  // 2️⃣ عرض بيانات كل يوم ومجموع الأسبوع
+  agents.forEach(agent => {
+    let row = document.createElement("tr");
+    let total = 0;
+
+    let tdAgent = document.createElement("td");
+    tdAgent.innerText = agent;
+    row.appendChild(tdAgent);
+
+    // أيام الأسبوع من الإثنين للجمعة
+    for (let i = 0; i < 5; i++) {
+      let dayDate = new Date(stored.weekStart);
+      dayDate.setDate(dayDate.getDate() + i);
+      let dayStr = dayDate.toISOString().split('T')[0];
+
+      let td = document.createElement("td");
+      let val = stored.dailyData[dayStr] && stored.dailyData[dayStr][agent] ? stored.dailyData[dayStr][agent] : 0;
+      td.innerText = val;
+      total += val;
+      row.appendChild(td);
+    }
+
+    let tdTotal = document.createElement("td");
+    tdTotal.innerText = total;
+    row.appendChild(tdTotal);
+
+    tableBody.appendChild(row);
+  });
+
+  updateLeaderboard(agents);
+}
+
+// 🏆 عرض الـ Leaderboard
+function updateLeaderboard(agents) {
+  let totals = agents.map(agent => {
+    let sum = 0;
+    for (let day in stored.dailyData) {
+      if (stored.dailyData[day][agent]) sum += stored.dailyData[day][agent];
+    }
+    return {agent, total: sum};
+  });
+
+  totals.sort((a,b) => b.total - a.total);
+
   let lb = document.getElementById("leaderboard");
   lb.innerHTML = "";
 
-  if (sorted[0]) lb.innerHTML += `<div class="gold">🥇 ${sorted[0][0]} - ${sorted[0][1]}</div>`;
-  if (sorted[1]) lb.innerHTML += `<div class="silver">🥈 ${sorted[1][0]} - ${sorted[1][1]}</div>`;
-  if (sorted[2]) lb.innerHTML += `<div class="bronze">🥉 ${sorted[2][0]} - ${sorted[2][1]}</div>`;
-
-  let table = document.getElementById("tableBody");
-  table.innerHTML = "";
-
-  sorted.forEach((item, index) => {
-    table.innerHTML += `<tr>
-      <td>${index + 1}</td>
-      <td>${item[0]}</td>
-      <td>${item[1]}</td>
-    </tr>`;
-  });
+  if (totals[0]) lb.innerHTML += `<div class="gold">🥇 ${totals[0].agent} - ${totals[0].total}</div>`;
+  if (totals[1]) lb.innerHTML += `<div class="silver">🥈 ${totals[1].agent} - ${totals[1].total}</div>`;
+  if (totals[2]) lb.innerHTML += `<div class="bronze">🥉 ${totals[2].agent} - ${totals[2].total}</div>`;
 }
 
-// تشغيل أولي
-checkNewWeek();
+// 🔄 تشغيل أولي
 updateUI();
-</script>
-
-</body>
-</html>
