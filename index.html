@@ -1,8 +1,11 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Transfer Tracker 🚀</title>
+<title>Excel Transfer Tracker 🚀</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
 body {
@@ -10,27 +13,6 @@ body {
   background: #0f172a;
   color: white;
   text-align: center;
-}
-
-.container {
-  margin-top: 50px;
-}
-
-input, button {
-  padding: 10px;
-  margin: 10px;
-  border-radius: 10px;
-  border: none;
-}
-
-button {
-  background: #22c55e;
-  color: white;
-  cursor: pointer;
-}
-
-button:hover {
-  background: #16a34a;
 }
 
 table {
@@ -44,85 +26,84 @@ th, td {
   padding: 10px;
 }
 
-th {
-  background: #1e293b;
-}
+.gold { color: gold; }
+.silver { color: silver; }
+.bronze { color: #cd7f32; }
 </style>
 </head>
 
 <body>
 
-<div class="container">
-  <h2>🚀 Transfer Tracker</h2>
+<h2>📂 Upload Excel File</h2>
 
-  <input type="text" id="agent" placeholder="Agent Name">
-  <input type="number" id="transfers" placeholder="Transfers">
+<input type="file" id="fileInput" accept=".xlsx, .xls">
 
-  <br>
-  <button onclick="addTransfer()">ADD</button>
-  <button onclick="resetData()">RESET</button>
+<div id="leaderboard"></div>
 
-  <h3>📊 Summary</h3>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Agent</th>
-        <th>Total Transfers</th>
-      </tr>
-    </thead>
-    <tbody id="tableBody"></tbody>
-  </table>
-</div>
+<table>
+  <thead>
+    <tr>
+      <th>Rank</th>
+      <th>Agent</th>
+      <th>Total Transfers</th>
+    </tr>
+  </thead>
+  <tbody id="tableBody"></tbody>
+</table>
 
 <script>
-let data = JSON.parse(localStorage.getItem("transfers")) || {};
+document.getElementById('fileInput').addEventListener('change', handleFile);
 
-function addTransfer() {
-  let agent = document.getElementById("agent").value.trim();
-  let transfers = parseInt(document.getElementById("transfers").value);
+function handleFile(e) {
+  const file = e.target.files[0];
+  const reader = new FileReader();
 
-  if (!agent || isNaN(transfers)) {
-    alert("Enter valid data");
-    return;
-  }
+  reader.onload = function(e) {
+    const data = new Uint8Array(e.target.result);
+    const workbook = XLSX.read(data, {type: 'array'});
 
-  if (!data[agent]) {
-    data[agent] = 0;
-  }
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(sheet);
 
-  data[agent] += transfers;
+    processData(json);
+  };
 
-  localStorage.setItem("transfers", JSON.stringify(data));
-
-  updateTable();
-
-  document.getElementById("agent").value = "";
-  document.getElementById("transfers").value = "";
+  reader.readAsArrayBuffer(file);
 }
 
-function updateTable() {
+function processData(rows) {
+  let totals = {};
+
+  rows.forEach(row => {
+    let agent = row["Agent"];
+    let transfers = Number(row["Transfers"]);
+
+    if (!totals[agent]) totals[agent] = 0;
+    totals[agent] += transfers;
+  });
+
+  let sorted = Object.entries(totals).sort((a,b) => b[1] - a[1]);
+
+  // Leaderboard
+  let lb = document.getElementById("leaderboard");
+  lb.innerHTML = "";
+
+  if (sorted[0]) lb.innerHTML += `<div class="gold">🥇 ${sorted[0][0]} - ${sorted[0][1]}</div>`;
+  if (sorted[1]) lb.innerHTML += `<div class="silver">🥈 ${sorted[1][0]} - ${sorted[1][1]}</div>`;
+  if (sorted[2]) lb.innerHTML += `<div class="bronze">🥉 ${sorted[2][0]} - ${sorted[2][1]}</div>`;
+
+  // Table
   let table = document.getElementById("tableBody");
   table.innerHTML = "";
 
-  for (let agent in data) {
-    let row = `<tr>
-      <td>${agent}</td>
-      <td>${data[agent]}</td>
+  sorted.forEach((item, index) => {
+    table.innerHTML += `<tr>
+      <td>${index + 1}</td>
+      <td>${item[0]}</td>
+      <td>${item[1]}</td>
     </tr>`;
-    table.innerHTML += row;
-  }
+  });
 }
-
-function resetData() {
-  if (confirm("Are you sure?")) {
-    localStorage.removeItem("transfers");
-    data = {};
-    updateTable();
-  }
-}
-
-updateTable();
 </script>
 
 </body>
